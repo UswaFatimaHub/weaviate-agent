@@ -58,7 +58,7 @@ const options = {
             query: {
               type: 'string',
               description: 'User query for support assistance or analytics',
-              example: 'How do I fix my iPhone battery issue?',
+              example: 'Show me MacBook Pro issues?',
               minLength: 1,
               maxLength: 1000
             },
@@ -287,7 +287,7 @@ const options = {
                   items: { type: 'string' },
                   description: 'Example RAG queries',
                   example: [
-                    'How do I fix my iPhone battery issue?',
+                    'Show me MacBook Pro issues?',
                     'What are common problems with GoPro cameras?'
                   ]
                 },

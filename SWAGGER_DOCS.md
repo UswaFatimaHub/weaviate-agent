@@ -36,7 +36,7 @@ The Swagger UI provides:
 ```json
 // RAG Query
 {
-  "query": "How do I fix my iPhone battery issue?"
+  "query": "Show me MacBook Pro issues?"
 }
 
 // Analytics Query
@@ -63,36 +63,15 @@ The Swagger UI provides:
 ```json
 {
   "status": "healthy",
-  "mode": "demo",
+  "mode": "production",
   "timestamp": "2025-09-17T07:50:29.789Z"
 }
 ```
 
-### 3. Demo Information (`GET /demo`)
-**Demo mode information and example queries**
-
-**Response:**
-```json
-{
-  "message": "Customer Support AI Assistant - DEMO MODE",
-  "note": "This is a demonstration version with mock responses",
-  "exampleQueries": {
-    "rag": ["How do I fix my iPhone battery issue?"],
-    "analytics": ["Show me ticket statistics"],
-    "combined": ["What are common iPhone issues and show analytics?"]
-  },
-  "endpoints": {
-    "query": "POST /query - Main query endpoint (demo mode)",
-    "health": "GET /health - Health check",
-    "demo": "GET /demo - This demo information"
-  }
-}
-```
-
-### 4. Tenants (`GET /tenants`) - Production Only
+### 3. Tenants (`GET /tenants`) 
 **Available products/tenants in the system**
 
-### 5. Statistics (`GET /stats`) - Production Only
+### 4. Statistics (`GET /stats`) 
 **System statistics and metrics**
 
 ## 🎯 Swagger Features
@@ -109,8 +88,7 @@ The Swagger UI provides:
 - **ErrorResponse**: Standardized error handling
 - **HealthResponse**: System status information
 - **TenantsResponse**: Multi-tenant data structure
-- **StatsResponse**: System analytics
-- **DemoResponse**: Demo mode information
+- **StatsResponse**: System statistics and health information
 
 ### Multiple Examples
 Each endpoint includes multiple example scenarios:
@@ -194,12 +172,12 @@ QueryResponse:
           description: Tenant used for the query
         mode:
           type: string
-          description: Server mode (demo or production)
+          description: Server mode (production)
 ```
 
-## 🎬 Demo Scenarios in Swagger
+## 🎬 Test Scenarios in Swagger
 
-### 1. RAG Query Demo
+### 1. RAG Query Testing
 **Endpoint:** `POST /query`
 **Example:** `{"query": "How do I fix my iPhone battery issue?"}`
 
@@ -217,7 +195,7 @@ QueryResponse:
 }
 ```
 
-### 2. Analytics Query Demo
+### 2. Analytics Query Testing
 **Endpoint:** `POST /query`
 **Example:** `{"query": "Show me ticket statistics and analytics"}`
 
@@ -250,7 +228,7 @@ QueryResponse:
 }
 ```
 
-### 3. Combined Query Demo
+### 3. Combined Query Testing
 **Endpoint:** `POST /query`
 **Example:** `{"query": "What are common GoPro issues and show me the analytics?"}`
 
@@ -306,7 +284,7 @@ QueryResponse:
 
 ### For API Consumers
 - **Clear request/response examples**
-- **Multiple scenario demonstrations**
+- **Multiple test scenarios**
 - **Error handling guidance**
 - **Schema validation** for request building
 
@@ -328,7 +306,7 @@ http://localhost:3000/api-docs
 ```
 
 ### Security Considerations
-- **No authentication** required in demo mode
+- **No authentication** required for testing
 - **Rate limiting** can be added for production
 - **API key authentication** can be integrated
 - **CORS configuration** for cross-origin requests

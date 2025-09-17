@@ -7,9 +7,9 @@
 curl http://localhost:3000/health
 ```
 
-### Demo Information
+### System Statistics
 ```bash
-curl http://localhost:3000/demo
+curl http://localhost:3000/stats
 ```
 
 ## 📋 Query Examples
@@ -33,7 +33,7 @@ curl -X POST http://localhost:3000/query \
   },
   "chart": null,
   "metadata": {
-    "mode": "demo",
+    "mode": "production",
     "timestamp": "2025-09-17T07:41:09.931Z",
     "tenant": "global"
   }
@@ -99,7 +99,7 @@ curl -X POST http://localhost:3000/query \
     }
   },
   "metadata": {
-    "mode": "demo",
+    "mode": "production",
     "timestamp": "2025-09-17T07:41:16.888Z",
     "tenant": "global"
   }
@@ -128,7 +128,7 @@ curl -X POST http://localhost:3000/query \
     "priorityDistribution": { /* Chart.js config */ }
   },
   "metadata": {
-    "mode": "demo",
+    "mode": "production",
     "timestamp": "2025-09-17T07:41:23.306Z",
     "tenant": "global"
   }
@@ -258,18 +258,18 @@ curl http://localhost:3000/stats
 }
 ```
 
-## 🎬 Demo Script for Video Walkthrough
+## 🎬 Video Walkthrough Script
 
 ### 1. Introduction (5 mins)
 ```bash
 # Show system health
 curl http://localhost:3000/health
 
-# Show demo information
-curl http://localhost:3000/demo
+# Show system statistics
+curl http://localhost:3000/stats
 ```
 
-### 2. RAG Agent Demo (10 mins)
+### 2. RAG Agent Testing (10 mins)
 ```bash
 # Test various support queries
 curl -X POST http://localhost:3000/query \
@@ -281,7 +281,7 @@ curl -X POST http://localhost:3000/query \
   -d '{"query": "What are common problems with GoPro cameras?"}'
 ```
 
-### 3. Chart Tool Demo (10 mins)
+### 3. Chart Tool Testing (10 mins)
 ```bash
 # Test analytics queries
 curl -X POST http://localhost:3000/query \
@@ -293,7 +293,7 @@ curl -X POST http://localhost:3000/query \
   -d '{"query": "Generate analytics for support tickets"}'
 ```
 
-### 4. Delegating Agent Demo (10 mins)
+### 4. Delegating Agent Testing (10 mins)
 ```bash
 # Test combined queries
 curl -X POST http://localhost:3000/query \
@@ -305,7 +305,7 @@ curl -X POST http://localhost:3000/query \
   -d '{"query": "Tell me about GoPro problems and generate charts"}'
 ```
 
-### 5. Multi-Tenancy Demo (10 mins)
+### 5. Multi-Tenancy Testing (10 mins)
 ```bash
 # Test tenant-specific queries
 curl -X POST http://localhost:3000/query \
@@ -387,4 +387,4 @@ curl -X POST http://localhost:3000/query \
 - NFR-2: Node.js v18+ environment
 - NFR-3: Weaviate in Docker with multi-tenancy
 - NFR-4: Video walkthrough ≤60 minutes
-- NFR-5: Clear demonstrations and documentation
+- NFR-5: Clear testing scenarios and documentation
