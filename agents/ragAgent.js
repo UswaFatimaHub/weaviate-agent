@@ -104,6 +104,25 @@ class RAGAgent {
       }
 
       const result = await searchQuery.do();
+      
+      // Check for GraphQL errors (like transformer service unavailable)
+      if (result.errors && result.errors.length > 0) {
+        const errorMessage = result.errors[0].message;
+        console.error('GraphQL error detected:', errorMessage);
+        
+        // Check if it's a transformer service error
+        if (errorMessage.includes('t2v-transformers') || 
+            errorMessage.includes('vectorize') || 
+            errorMessage.includes('no such host') ||
+            errorMessage.includes('dial tcp: lookup t2v-transformers')) {
+          console.log('🚨 Transformer embedding service unavailable - falling back to GraphQL search');
+          return this.fallbackSearch(query, tenant, limit);
+        }
+        
+        // For other GraphQL errors, throw to trigger catch block
+        throw new Error(`GraphQL error: ${errorMessage}`);
+      }
+      
       const tickets = result.data.Get[config.weaviate.className] || [];
 
       console.log(`📊 Found ${tickets.length} relevant tickets`);
@@ -111,16 +130,44 @@ class RAGAgent {
 
     } catch (error) {
       console.error('RAG Agent search error:', error);
-      
-      // FR-5: Fallback to fetchObjects API if embedding model is unavailable
+
+      // Check if it's a connection error (Weaviate down)
+      const isConnectionError = error.message && (
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('fetch failed') ||
+        error.message.includes('Connection refused') ||
+        error.code === 'ECONNREFUSED'
+      );
+
+      // Check if it's a transformer service error (embedding model unavailable)
+      const isTransformerError = error.message && (
+        error.message.includes('t2v-transformers') ||
+        error.message.includes('vectorize') ||
+        error.message.includes('no such host') ||
+        error.message.includes('dial tcp: lookup t2v-transformers')
+      );
+
+      if (isConnectionError) {
+        console.log('🚨 Weaviate connection failed - returning empty result');
+        return [];
+      }
+
+      if (isTransformerError) {
+        console.log('🚨 Transformer embedding service unavailable - falling back to GraphQL search');
+        return this.fallbackSearch(query, tenant, limit);
+      }
+
+      // FR-5: Fallback to fetchObjects API for other errors
       console.log('🔄 Falling back to fetchObjects API...');
       return this.fallbackSearch(query, tenant, limit);
     }
   }
 
-  // FR-5: Fallback method using fetchObjects API
+  // FR-5: Fallback method using fetchObjects API when GraphQL fails
   async fallbackSearch(query, tenant = null, limit = 5) {
     try {
+      console.log('🔄 Attempting GraphQL fallback search...');
+      
       const whereClause = tenant ? {
         operator: 'And',
         operands: [
@@ -170,14 +217,99 @@ class RAGAgent {
         .do();
 
       const tickets = result.data.Get[config.weaviate.className] || [];
-      console.log(`📊 Fallback search found ${tickets.length} tickets`);
+      console.log(`📊 GraphQL fallback search found ${tickets.length} tickets`);
       return tickets;
 
     } catch (error) {
-      console.error('Fallback search error:', error);
+      console.error('GraphQL fallback search error:', error);
+      
+      // Check for connection errors
+      const isConnectionError = error.message && (
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('fetch failed') ||
+        error.message.includes('Connection refused') ||
+        error.code === 'ECONNREFUSED'
+      );
+
+      if (isConnectionError) {
+        console.log('🚨 Weaviate connection failed in fallback - returning empty result');
+        return [];
+      }
+      
+      console.log('🔄 Attempting fetchObjects API as final fallback...');
+      
+      // Final fallback: Use fetchObjects API directly
+      return this.fetchObjectsFallback(query, tenant, limit);
+    }
+  }
+
+  // Ultimate fallback: Use fetchObjects API when all GraphQL methods fail
+  async fetchObjectsFallback(query, tenant = null, limit = 5) {
+    try {
+      console.log('🛡️ Using fetchObjects API as ultimate fallback...');
+      
+      // Use the raw REST API instead of GraphQL
+      const whereFilter = tenant ? {
+        operator: 'And',
+        operands: [
+          {
+            path: ['productPurchased'],
+            operator: 'Equal',
+            valueText: tenant
+          },
+          {
+            operator: 'Or',
+            operands: [
+              {
+                path: ['ticketSubject'],
+                operator: 'Like',
+                valueText: `*${query}*`
+              },
+              {
+                path: ['ticketDescription'],
+                operator: 'Like',
+                valueText: `*${query}*`
+              }
+            ]
+          }
+        ]
+      } : {
+        operator: 'Or',
+        operands: [
+          {
+            path: ['ticketSubject'],
+            operator: 'Like',
+            valueText: `*${query}*`
+          },
+          {
+            path: ['ticketDescription'],
+            operator: 'Like',
+            valueText: `*${query}*`
+          }
+        ]
+      };
+
+      // Use the data.getter API which uses fetchObjects under the hood
+      const result = await this.client.data
+        .getter()
+        .withClassName(config.weaviate.className)
+        .withWhere(whereFilter)
+        .withLimit(limit)
+        .do();
+
+      const tickets = result || [];
+      console.log(`📊 fetchObjects API found ${tickets.length} tickets`);
+      return tickets;
+
+    } catch (error) {
+      console.error('fetchObjects API error:', error);
+      console.log('🚨 All Weaviate APIs failed - returning empty result');
+      
+      // Return empty result when all Weaviate APIs fail
       return [];
     }
   }
+
 
   // FR-4: Generate response with ticket information and references (used by legacy method)
   async generateResponse(userQuery, tickets) {
@@ -217,7 +349,7 @@ Answer:`;
 
     try {
       const response = await this.llm.invoke(prompt);
-      
+
       return {
         answer: response.content.trim(),
         references: {
@@ -226,14 +358,72 @@ Answer:`;
       };
     } catch (error) {
       console.error('Error generating RAG response:', error);
+      
+      // Enhanced fallback when LLM fails (Google API quota, network issues, etc.)
+      console.log('🔄 Using template-based response fallback...');
+      return this.generateFallbackResponse(userQuery, tickets, error);
+    }
+  }
+
+  // Template-based response generation when LLM fails
+  generateFallbackResponse(userQuery, tickets, error) {
+    if (!tickets || tickets.length === 0) {
       return {
-        answer: "I found relevant tickets but encountered an error generating a response. Here are the ticket references: " + 
-                tickets.map(t => `#${t.ticketId}`).join(', '),
-        references: {
-          ticketIds: tickets.map(ticket => ticket.ticketId)
-        }
+        answer: "I couldn't find any relevant support tickets for your query. This may be due to system limitations. Please try rephrasing your question or contact support directly.",
+        references: { ticketIds: [], fallbackUsed: true, error: 'No tickets found' }
       };
     }
+
+    // Generate a structured response without LLM
+    let answer = `Based on your query "${userQuery}", I found ${tickets.length} relevant support ticket(s):\n\n`;
+    
+    for (let index = 0; index < tickets.length; index++) {
+      const ticket = tickets[index];
+      answer += `**Ticket #${ticket.ticketId}** (${ticket.ticketPriority || 'Unknown'} Priority)\n`;
+      answer += `**Subject:** ${ticket.ticketSubject}\n`;
+      answer += `**Product:** ${ticket.productPurchased}\n`;
+      answer += `**Status:** ${ticket.ticketStatus}\n`;
+      
+      if (ticket.ticketDescription) {
+        answer += `**Issue:** ${ticket.ticketDescription.substring(0, 150)}${ticket.ticketDescription.length > 150 ? '...' : ''}\n`;
+      }
+      
+      if (ticket.resolution) {
+        answer += `**Resolution:** ${ticket.resolution.substring(0, 200)}${ticket.resolution.length > 200 ? '...' : ''}\n`;
+      }
+      
+      answer += '\n';
+      
+      // Limit to first 3 tickets to keep response manageable
+      if (index >= 2) {
+        const remaining = tickets.length - 3;
+        if (remaining > 0) {
+          answer += `... and ${remaining} more similar ticket(s).\n`;
+        }
+        break;
+      }
+    }
+
+    // Add general guidance based on query keywords
+    const queryLower = userQuery.toLowerCase();
+    if (queryLower.includes('battery')) {
+      answer += '\n**General Battery Tips:**\n- Check for iOS/firmware updates\n- Review battery usage in settings\n- Consider battery replacement if device is old\n';
+    } else if (queryLower.includes('camera') || queryLower.includes('recording')) {
+      answer += '\n**General Camera Tips:**\n- Ensure sufficient storage space\n- Check SD card compatibility\n- Update device firmware\n';
+    } else if (queryLower.includes('setup') || queryLower.includes('install')) {
+      answer += '\n**General Setup Tips:**\n- Follow the quick start guide\n- Ensure stable internet connection\n- Check device compatibility\n';
+    }
+
+    answer += '\n*Note: This response was generated using fallback mode due to temporary service limitations.*';
+
+    return {
+      answer: answer.trim(),
+      references: {
+        ticketIds: tickets.map(ticket => ticket.ticketId),
+        fallbackUsed: true,
+        fallbackReason: error.message || 'LLM service unavailable'
+      }
+    };
   }
 
   // Main method to handle RAG queries using the agent

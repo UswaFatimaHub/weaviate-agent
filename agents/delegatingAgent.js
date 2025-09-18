@@ -362,15 +362,30 @@ Respond with ONLY a JSON object:
 
     } catch (error) {
       console.error('Query analysis error:', error);
-      // Enhanced fallback logic
+      
+      // Check if it's a quota error and handle appropriately
+      const isQuotaError = error.message && (
+        error.message.includes('429') || 
+        error.message.includes('Too Many Requests') ||
+        error.message.includes('quota') ||
+        error.message.includes('rate limit')
+      );
+      
+      if (isQuotaError) {
+        console.log('🚦 Google API quota exceeded, using enhanced keyword analysis...');
+      }
+      
+      // Enhanced fallback logic with more keywords
       const queryLower = userQuery.toLowerCase();
-      const hasIssueKeywords = /issue|problem|fix|trouble|error|common|help|setup|install|battery|camera|tv/.test(queryLower);
-      const hasAnalyticsKeywords = /analytics|chart|statistic|data|show.*stat|distribution|trend|visual/.test(queryLower);
+      const hasIssueKeywords = /issue|problem|fix|trouble|error|common|help|setup|install|battery|camera|tv|broken|not working|malfunction|defect/.test(queryLower);
+      const hasAnalyticsKeywords = /analytics|chart|statistic|data|show.*stat|distribution|trend|visual|graph|report|dashboard|metrics/.test(queryLower);
       
       return {
         needsRAG: hasIssueKeywords,
         needsChart: hasAnalyticsKeywords,
-        reasoning: 'Fallback analysis based on keywords'
+        reasoning: isQuotaError ? 
+          'Fallback analysis due to API quota limits - using keyword detection' : 
+          'Fallback analysis based on keywords due to LLM error'
       };
     }
   }
