@@ -16,12 +16,12 @@ curl http://localhost:3000/stats
 
 ### 1. RAG Query - Support Ticket Retrieval
 
-**Query:** "How do I fix my iPhone battery issue?"
+**Query:** "Show most common GoPro Hero issues"
 
 ```bash
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "How do I fix my iPhone battery issue?"}'
+  -d '{"query": "Show most common GoPro Hero issues"}'
 ```
 
 **Response:**
@@ -274,7 +274,7 @@ curl http://localhost:3000/stats
 # Test various support queries
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "How do I fix my iPhone battery issue?"}'
+  -d '{"query": "Show most common GoPro Hero issues"}'
 
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \

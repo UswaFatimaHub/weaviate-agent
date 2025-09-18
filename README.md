@@ -105,7 +105,7 @@ Visit `http://localhost:3000/api-docs` for Swagger UI with:
 ```bash
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "How do I fix my iPhone battery issue?"}'
+  -d '{"query": "Show most common GoPro Hero issues"}'
 ```
 
 #### 2. Analytics Query (Chart Generation)

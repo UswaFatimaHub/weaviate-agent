@@ -96,7 +96,7 @@ class SupportAssistantServer {
      *             rag_query:
      *               summary: RAG Query Example
      *               value:
-     *                 query: "How do I fix my iPhone battery issue?"
+     *                 query: "Show most common GoPro Hero issues"
      *             analytics_query:
      *               summary: Analytics Query Example
      *               value:

@@ -127,7 +127,7 @@ QueryRequest:
     query:
       type: string
       description: User query for support assistance or analytics
-      example: "How do I fix my iPhone battery issue?"
+      example: "Show most common GoPro Hero issues"
       minLength: 1
       maxLength: 1000
     tenant:
@@ -179,7 +179,7 @@ QueryResponse:
 
 ### 1. RAG Query Testing
 **Endpoint:** `POST /query`
-**Example:** `{"query": "How do I fix my iPhone battery issue?"}`
+**Example:** `{"query": "Show most common GoPro Hero issues"}`
 
 **Expected Response:**
 ```json
@@ -262,7 +262,7 @@ QueryResponse:
 ### Example Test Queries
 ```json
 // Test RAG functionality
-{"query": "How do I fix my iPhone battery issue?"}
+{"query": "Show most common GoPro Hero issues"}
 
 // Test analytics functionality
 {"query": "Show me ticket statistics"}

@@ -62,7 +62,7 @@ class ComprehensiveAgentTester {
     console.log('=' .repeat(50));
 
     const testQueries = [
-      { query: 'How do I fix my iPhone battery issue?', tenant: null },
+      { query: 'Show most common GoPro Hero issues', tenant: null },
       { query: 'What are common problems with GoPro cameras?', tenant: 'GoPro Hero' },
       { query: 'I need help with my Samsung TV setup', tenant: null }
     ];
@@ -150,7 +150,7 @@ class ComprehensiveAgentTester {
     const testScenarios = [
       {
         name: 'RAG Query',
-        query: 'How do I fix my iPhone battery issue?',
+        query: 'Show most common GoPro Hero issues',
         expectedFeatures: ['answer']
       },
       {

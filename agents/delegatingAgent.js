@@ -131,7 +131,7 @@ Respond with a JSON object:
 }
 
 Examples:
-- "How do I fix my iPhone battery issue?" → needsRAG: true, needsChart: false
+- "Show most common GoPro Hero issues" → needsRAG: true, needsChart: false
 - "Show me ticket statistics" → needsRAG: false, needsChart: true  
 - "What are the common issues with GoPro and show me the analytics" → needsRAG: true, needsChart: true
 `;
