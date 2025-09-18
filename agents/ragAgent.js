@@ -1,9 +1,5 @@
-// RAG Agent for ticket retrieval from Weaviate - UPDATED VERSION
+// RAG Agent for ticket retrieval from Weaviate - CLEANED VERSION
 import weaviate from 'weaviate-ts-client';
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { MemorySaver } from '@langchain/langgraph';
-import { DynamicTool } from '@langchain/core/tools';
-import { HumanMessage } from '@langchain/core/messages';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import config from '../config.js';
 
@@ -20,57 +16,59 @@ class RAGAgent {
       temperature: 0,
       apiKey: process.env.GOOGLE_API_KEY,
     });
-    
-    // Initialize memory
-    this.memory = new MemorySaver();
-    
-    // Create tools
-    this.tools = this.createTools();
-    
-    // Create the agent
-    this.agent = createReactAgent({
-      llm: this.llm,
-      tools: this.tools,
-      checkpointSaver: this.memory,
-    });
   }
 
-  createTools() {
-    const searchTicketsTool = new DynamicTool({
-      name: "searchTickets",
-      description: "Search for support tickets by query and optional tenant/product filter. Input should be a JSON string with 'query' and optional 'tenant' and 'limit' fields.",
-      func: async (input) => {
-        try {
-          console.log("🔍 RAG Tool called with input:", input);
-          
-          // Parse input
-          let params;
-          try {
-            params = typeof input === 'string' ? JSON.parse(input) : input;
-          } catch {
-            params = { query: String(input) };
-          }
-          
-          const { query, tenant = null, limit = 5 } = params;
-          const tickets = await this.searchTickets(query, tenant, limit);
-          
-          return JSON.stringify({
-            success: true,
-            tickets: tickets,
-            count: tickets.length
-          });
-        } catch (error) {
-          console.error('Search tickets tool error:', error);
-          return JSON.stringify({
-            success: false,
-            error: error.message,
-            tickets: []
-          });
-        }
-      },
-    });
+  // Helper method to detect error types
+  detectErrorType(error) {
+    const message = error.message || '';
+    
+    const isConnectionError = (
+      message.includes('ECONNREFUSED') ||
+      message.includes('fetch failed') ||
+      message.includes('Connection refused') ||
+      error.code === 'ECONNREFUSED'
+    );
 
-    return [searchTicketsTool];
+    const isTransformerError = (
+      message.includes('t2v-transformers') ||
+      message.includes('vectorize') ||
+      message.includes('no such host') ||
+      message.includes('dial tcp: lookup t2v-transformers')
+    );
+
+    return { isConnectionError, isTransformerError };
+  }
+
+  // Helper method to extract keywords from query
+  extractKeywords(query) {
+    return query.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 2) // Filter out short words like "is", "the", etc.
+      .slice(0, 3); // Limit to first 3 keywords to avoid overly complex queries
+  }
+
+  // Helper method to create keyword search conditions
+  createKeywordConditions(keywords) {
+    return keywords.map(keyword => ({
+      operator: 'Or',
+      operands: [
+        {
+          path: ['ticketSubject'],
+          operator: 'Like',
+          valueText: `*${keyword}*`
+        },
+        {
+          path: ['ticketDescription'],
+          operator: 'Like',
+          valueText: `*${keyword}*`
+        },
+        {
+          path: ['productPurchased'],
+          operator: 'Like',
+          valueText: `*${keyword}*`
+        }
+      ]
+    }));
   }
 
   // FR-3: Query Weaviate for relevant tickets based on ticketSubject, ticketDescription, and Tenant
@@ -111,10 +109,8 @@ class RAGAgent {
         console.error('GraphQL error detected:', errorMessage);
         
         // Check if it's a transformer service error
-        if (errorMessage.includes('t2v-transformers') || 
-            errorMessage.includes('vectorize') || 
-            errorMessage.includes('no such host') ||
-            errorMessage.includes('dial tcp: lookup t2v-transformers')) {
+        const { isTransformerError } = this.detectErrorType({ message: errorMessage });
+        if (isTransformerError) {
           console.log('🚨 Transformer embedding service unavailable - falling back to GraphQL search');
           return this.fallbackSearch(query, tenant, limit);
         }
@@ -131,21 +127,7 @@ class RAGAgent {
     } catch (error) {
       console.error('RAG Agent search error:', error);
 
-      // Check if it's a connection error (Weaviate down)
-      const isConnectionError = error.message && (
-        error.message.includes('ECONNREFUSED') ||
-        error.message.includes('fetch failed') ||
-        error.message.includes('Connection refused') ||
-        error.code === 'ECONNREFUSED'
-      );
-
-      // Check if it's a transformer service error (embedding model unavailable)
-      const isTransformerError = error.message && (
-        error.message.includes('t2v-transformers') ||
-        error.message.includes('vectorize') ||
-        error.message.includes('no such host') ||
-        error.message.includes('dial tcp: lookup t2v-transformers')
-      );
+      const { isConnectionError, isTransformerError } = this.detectErrorType(error);
 
       if (isConnectionError) {
         console.log('🚨 Weaviate connection failed - returning empty result');
@@ -167,6 +149,14 @@ class RAGAgent {
   async fallbackSearch(query, tenant = null, limit = 5) {
     try {
       console.log('🔄 Attempting GraphQL fallback search...');
+      console.log(`🔍 Fallback search params: query="${query}", tenant="${tenant}", limit=${limit}`);
+      
+      // Extract keywords from the query for better matching
+      const keywords = this.extractKeywords(query);
+      console.log(`🔍 Extracted keywords: ${keywords.join(', ')}`);
+      
+      // Create search conditions for each keyword
+      const keywordConditions = this.createKeywordConditions(keywords);
       
       const whereClause = tenant ? {
         operator: 'And',
@@ -178,35 +168,15 @@ class RAGAgent {
           },
           {
             operator: 'Or',
-            operands: [
-              {
-                path: ['ticketSubject'],
-                operator: 'Like',
-                valueText: `*${query}*`
-              },
-              {
-                path: ['ticketDescription'],
-                operator: 'Like',
-                valueText: `*${query}*`
-              }
-            ]
+            operands: keywordConditions
           }
         ]
       } : {
         operator: 'Or',
-        operands: [
-          {
-            path: ['ticketSubject'],
-            operator: 'Like',
-            valueText: `*${query}*`
-          },
-          {
-            path: ['ticketDescription'],
-            operator: 'Like',
-            valueText: `*${query}*`
-          }
-        ]
+        operands: keywordConditions
       };
+
+      console.log('🔍 GraphQL where clause:', JSON.stringify(whereClause, null, 2));
 
       const result = await this.client.graphql
         .get()
@@ -216,20 +186,22 @@ class RAGAgent {
         .withLimit(limit)
         .do();
 
+      console.log('🔍 GraphQL fallback result:', JSON.stringify(result, null, 2));
+
       const tickets = result.data.Get[config.weaviate.className] || [];
       console.log(`📊 GraphQL fallback search found ${tickets.length} tickets`);
+      
+      if (tickets.length === 0) {
+        console.log('🚨 No tickets found in GraphQL fallback, trying fetchObjects API...');
+        return this.fetchObjectsFallback(query, tenant, limit);
+      }
+      
       return tickets;
 
     } catch (error) {
       console.error('GraphQL fallback search error:', error);
       
-      // Check for connection errors
-      const isConnectionError = error.message && (
-        error.message.includes('ECONNREFUSED') ||
-        error.message.includes('fetch failed') ||
-        error.message.includes('Connection refused') ||
-        error.code === 'ECONNREFUSED'
-      );
+      const { isConnectionError } = this.detectErrorType(error);
 
       if (isConnectionError) {
         console.log('🚨 Weaviate connection failed in fallback - returning empty result');
@@ -247,8 +219,12 @@ class RAGAgent {
   async fetchObjectsFallback(query, tenant = null, limit = 5) {
     try {
       console.log('🛡️ Using fetchObjects API as ultimate fallback...');
+      console.log(`🔍 fetchObjects params: query="${query}", tenant="${tenant}", limit=${limit}`);
       
-      // Use the raw REST API instead of GraphQL
+      // Extract keywords and create conditions (same logic as fallbackSearch)
+      const keywords = this.extractKeywords(query);
+      const keywordConditions = this.createKeywordConditions(keywords);
+      
       const whereFilter = tenant ? {
         operator: 'And',
         operands: [
@@ -259,35 +235,15 @@ class RAGAgent {
           },
           {
             operator: 'Or',
-            operands: [
-              {
-                path: ['ticketSubject'],
-                operator: 'Like',
-                valueText: `*${query}*`
-              },
-              {
-                path: ['ticketDescription'],
-                operator: 'Like',
-                valueText: `*${query}*`
-              }
-            ]
+            operands: keywordConditions
           }
         ]
       } : {
         operator: 'Or',
-        operands: [
-          {
-            path: ['ticketSubject'],
-            operator: 'Like',
-            valueText: `*${query}*`
-          },
-          {
-            path: ['ticketDescription'],
-            operator: 'Like',
-            valueText: `*${query}*`
-          }
-        ]
+        operands: keywordConditions
       };
+
+      console.log('🔍 fetchObjects where filter:', JSON.stringify(whereFilter, null, 2));
 
       // Use the data.getter API which uses fetchObjects under the hood
       const result = await this.client.data
@@ -296,6 +252,8 @@ class RAGAgent {
         .withWhere(whereFilter)
         .withLimit(limit)
         .do();
+
+      console.log('🔍 fetchObjects result:', JSON.stringify(result, null, 2));
 
       const tickets = result || [];
       console.log(`📊 fetchObjects API found ${tickets.length} tickets`);
@@ -426,46 +384,11 @@ Answer:`;
     };
   }
 
-  // Main method to handle RAG queries using the agent
-  async handleQuery(userQuery, tenant = null, threadId = "default") {
+
+  // Main method to handle RAG queries
+  async handleQuery(userQuery, tenant = null, limit = 10) {
     try {
       console.log(`🎯 RAG Agent handling query: "${userQuery}"`);
-      
-      // Create prompt with context about available tools
-      const prompt = `You are a helpful customer support assistant. You have access to a search tool to find relevant support tickets.
-
-User Query: "${userQuery}"
-${tenant ? `Product/Tenant Filter: ${tenant}` : 'Search across all products'}
-
-Please use the searchTickets tool to find relevant support tickets and provide a comprehensive answer based on the ticket information. Always include ticket IDs when referencing specific solutions.`;
-
-      // Run the agent
-      const result = await this.agent.invoke(
-        { messages: [new HumanMessage(prompt)] },
-        { configurable: { thread_id: threadId } }
-      );
-      
-      const finalMessage = result.messages.at(-1);
-      
-      console.log(`✅ RAG Agent completed successfully`);
-      return {
-        answer: finalMessage.content,
-        references: { threadId }
-      };
-      
-    } catch (error) {
-      console.error('RAG Agent error:', error);
-      return {
-        answer: "I encountered an error while searching for support tickets. Please try again.",
-        references: { threadId, error: error.message }
-      };
-    }
-  }
-
-  // Legacy method to handle RAG queries (for backward compatibility)
-  async handleQueryLegacy(userQuery, tenant = null, limit = 10) {
-    try {
-      console.log(`🎯 RAG Agent handling query (legacy): "${userQuery}"`);
       
       // Search for relevant tickets
       const tickets = await this.searchTickets(userQuery, tenant, limit);

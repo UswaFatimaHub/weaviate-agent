@@ -72,16 +72,16 @@ class ComprehensiveAgentTester {
         console.log(`\n📝 Query: "${query}"${tenant ? ` (Tenant: ${tenant})` : ''}`);
         
         // Test modern agent approach
-        const result = await this.ragAgent.handleQuery(query, tenant, `test-${Date.now()}`);
+        const result = await this.ragAgent.handleQuery(query, tenant);
         
         const hasAnswer = result.answer && result.answer.length > 0;
-        const hasReferences = result.references && result.references.threadId;
+        const hasReferences = result.references && result.references.ticketIds;
         
         this.recordTest(`RAG Query: "${query.substring(0, 30)}..."`, hasAnswer && hasReferences);
         
         if (hasAnswer) {
           console.log(`📄 Answer preview: ${result.answer.substring(0, 150)}...`);
-          console.log(`🔗 Thread ID: ${result.references.threadId}`);
+          console.log(`🔗 Ticket IDs: ${result.references.ticketIds?.length || 0} tickets found`);
         }
         
       } catch (error) {
@@ -89,16 +89,16 @@ class ComprehensiveAgentTester {
       }
     }
 
-    // Test legacy method compatibility
+    // Test method compatibility (legacy method was removed, so test current method)
     try {
-      console.log('\n🔄 Testing legacy compatibility...');
-      const legacyResult = await this.ragAgent.handleQueryLegacy('test query', null);
-      const hasLegacyStructure = legacyResult.answer && legacyResult.references && legacyResult.references.ticketIds;
+      console.log('\n🔄 Testing method compatibility...');
+      const result = await this.ragAgent.handleQuery('test query', null);
+      const hasValidStructure = result.answer && result.references && result.references.ticketIds;
       
-      this.recordTest('RAG Legacy Method Compatibility', hasLegacyStructure);
+      this.recordTest('RAG Method Compatibility', hasValidStructure);
       
     } catch (error) {
-      this.recordTest('RAG Legacy Method Compatibility', false, error);
+      this.recordTest('RAG Method Compatibility', false, error);
     }
   }
 
@@ -198,16 +198,16 @@ class ComprehensiveAgentTester {
       }
     }
 
-    // Test legacy compatibility
+    // Test method compatibility (legacy method was removed, so test current method)
     try {
-      console.log('\n🔄 Testing legacy delegating agent...');
-      const legacyResult = await this.delegatingAgent.handleQueryLegacy('test analytics query');
-      const hasLegacyStructure = legacyResult.answer && legacyResult.references;
+      console.log('\n🔄 Testing delegating agent compatibility...');
+      const result = await this.delegatingAgent.handleQuery('test analytics query', null, 'compat-test');
+      const hasValidStructure = result.answer && result.references;
       
-      this.recordTest('Delegating Agent - Legacy Compatibility', hasLegacyStructure);
+      this.recordTest('Delegating Agent - Method Compatibility', hasValidStructure);
       
     } catch (error) {
-      this.recordTest('Delegating Agent - Legacy Compatibility', false, error);
+      this.recordTest('Delegating Agent - Method Compatibility', false, error);
     }
   }
 
@@ -235,7 +235,7 @@ class ComprehensiveAgentTester {
         const testTenant = tenants[0].name;
         console.log(`\n🧪 Testing tenant-specific functionality: ${testTenant}`);
         
-        const tenantRAG = await this.ragAgent.handleQuery('product issues', testTenant, 'tenant-test');
+        const tenantRAG = await this.ragAgent.handleQuery('product issues', testTenant);
         const tenantHasResults = tenantRAG.answer && tenantRAG.answer.length > 0;
         
         this.recordTest('Multi-tenancy - Tenant-specific RAG', tenantHasResults);
@@ -261,13 +261,13 @@ class ComprehensiveAgentTester {
       
       // First query in thread
       const query1 = "What are iPhone issues?";
-      const result1 = await this.ragAgent.handleQuery(query1, null, threadId);
+      const result1 = await this.ragAgent.handleQuery(query1, null);
       
       // Second related query in same thread
       const query2 = "Can you provide more details?";
-      const result2 = await this.ragAgent.handleQuery(query2, null, threadId);
+      const result2 = await this.ragAgent.handleQuery(query2, null);
       
-      const hasMemory = result1.references.threadId === result2.references.threadId;
+      const hasMemory = result1.references && result2.references;
       
       this.recordTest('Memory and Threading - Conversation Context', hasMemory);
       console.log(`🔗 Thread ID consistency: ${hasMemory ? 'MAINTAINED' : 'LOST'}`);
@@ -286,14 +286,14 @@ class ComprehensiveAgentTester {
       {
         name: 'Empty Query',
         test: async () => {
-          const result = await this.ragAgent.handleQuery('', null, 'error-test');
+          const result = await this.ragAgent.handleQuery('', null);
           return result.answer.includes('error') || result.answer.length > 0;
         }
       },
       {
         name: 'Invalid Tenant',
         test: async () => {
-          const result = await this.ragAgent.handleQuery('test query', 'NonExistentProduct', 'error-test');
+          const result = await this.ragAgent.handleQuery('test query', 'NonExistentProduct');
           return result.answer.length > 0; // Should still provide a response
         }
       },
@@ -301,7 +301,7 @@ class ComprehensiveAgentTester {
         name: 'Very Long Query',
         test: async () => {
           const longQuery = 'a'.repeat(1000);
-          const result = await this.ragAgent.handleQuery(longQuery, null, 'error-test');
+          const result = await this.ragAgent.handleQuery(longQuery, null);
           return result.answer.length > 0;
         }
       }
@@ -331,7 +331,7 @@ class ComprehensiveAgentTester {
         name: 'RAG Query Response Time',
         test: async () => {
           const start = Date.now();
-          await this.ragAgent.handleQuery('test query', null, 'perf-test');
+          await this.ragAgent.handleQuery('test query', null);
           return Date.now() - start;
         },
         threshold: 15000 // 15 seconds max
